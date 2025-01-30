@@ -68,14 +68,22 @@ func (a AddrSpec) Address() string {
 type Request struct {
 	// Protocol version
 	Version uint8
+
+	// zhou: CMD in message "Connect"
 	// Requested command
 	Command uint8
 	// AuthContext provided during negotiation
 	AuthContext *AuthContext
+
+	// zhou: client connection's TCP address
 	// AddrSpec of the the network that sent the request
 	RemoteAddr *AddrSpec
+
+	// zhou: dest addr specified in message "Connect"
 	// AddrSpec of the desired destination
 	DestAddr *AddrSpec
+
+	// zhou: after rewrite
 	// AddrSpec of the actual destination (might be affected by rewrite)
 	realDestAddr *AddrSpec
 	bufConn      io.Reader
@@ -85,6 +93,8 @@ type conn interface {
 	Write([]byte) (int, error)
 	RemoteAddr() net.Addr
 }
+
+// zhou: read message "Connect"
 
 // NewRequest creates a new Request from the tcp connection
 func NewRequest(bufConn io.Reader) (*Request, error) {
@@ -98,6 +108,8 @@ func NewRequest(bufConn io.Reader) (*Request, error) {
 	if header[0] != socks5Version {
 		return nil, fmt.Errorf("Unsupported command version: %v", header[0])
 	}
+
+	// zhou: read message "Connect", [4,] bytes
 
 	// Read in the destination address
 	dest, err := readAddrSpec(bufConn)
@@ -115,6 +127,8 @@ func NewRequest(bufConn io.Reader) (*Request, error) {
 	return request, nil
 }
 
+// zhou: handle message "Connect"
+
 // handleRequest is used for request processing after authentication
 func (s *Server) handleRequest(req *Request, conn conn) error {
 	ctx := context.Background()
@@ -122,6 +136,7 @@ func (s *Server) handleRequest(req *Request, conn conn) error {
 	// Resolve the address if we have a FQDN
 	dest := req.DestAddr
 	if dest.FQDN != "" {
+		// zhou: FIXME, resolve FQDN should happen at same place of connecting to target server.
 		ctx_, addr, err := s.config.Resolver.Resolve(ctx, dest.FQDN)
 		if err != nil {
 			if err := sendReply(conn, hostUnreachable, nil); err != nil {
@@ -132,6 +147,8 @@ func (s *Server) handleRequest(req *Request, conn conn) error {
 		ctx = ctx_
 		dest.IP = addr
 	}
+
+	// zhou: in which case, the rewrite is required ???
 
 	// Apply any address rewrites
 	req.realDestAddr = req.DestAddr
@@ -154,6 +171,8 @@ func (s *Server) handleRequest(req *Request, conn conn) error {
 		return fmt.Errorf("Unsupported command: %v", req.Command)
 	}
 }
+
+// zhou: handle CMD "Connect", and send back "connected" or failure.
 
 // handleConnect is used to handle a connect command
 func (s *Server) handleConnect(ctx context.Context, conn conn, req *Request) error {
@@ -190,6 +209,8 @@ func (s *Server) handleConnect(ctx context.Context, conn conn, req *Request) err
 	}
 	defer target.Close()
 
+	// zhou: bind addr should be filled with local IP:Port
+
 	// Send success
 	local := target.LocalAddr().(*net.TCPAddr)
 	bind := AddrSpec{IP: local.IP, Port: local.Port}
@@ -213,6 +234,8 @@ func (s *Server) handleConnect(ctx context.Context, conn conn, req *Request) err
 	return nil
 }
 
+// zhou: NOT supported
+
 // handleBind is used to handle a connect command
 func (s *Server) handleBind(ctx context.Context, conn conn, req *Request) error {
 	// Check if this is allowed
@@ -231,6 +254,8 @@ func (s *Server) handleBind(ctx context.Context, conn conn, req *Request) error 
 	}
 	return nil
 }
+
+// zhou: NOT supported
 
 // handleAssociate is used to handle a connect command
 func (s *Server) handleAssociate(ctx context.Context, conn conn, req *Request) error {
@@ -251,10 +276,14 @@ func (s *Server) handleAssociate(ctx context.Context, conn conn, req *Request) e
 	return nil
 }
 
+// zhou: read message "Connect", [4,] bytes
+
 // readAddrSpec is used to read AddrSpec.
 // Expects an address type byte, follwed by the address and port
 func readAddrSpec(r io.Reader) (*AddrSpec, error) {
 	d := &AddrSpec{}
+
+	// zhou: the 4th byte is address type, IPv4/IPv6/FQDN.
 
 	// Get the address type
 	addrType := []byte{0}

@@ -16,10 +16,16 @@ const (
 
 // Config is used to setup and configure a Server
 type Config struct {
+	// zhou: supported Auth Methods
+
 	// AuthMethods can be provided to implement custom authentication
 	// By default, "auth-less" mode is enabled.
 	// For password-based auth use UserPassAuthenticator.
 	AuthMethods []Authenticator
+
+	// zhou: Only used in username/password authentication.
+	//       User need to provide "type CredentialStore interface{}" implementation
+	//       Or use "StaticCredentials".
 
 	// If provided, username/password authentication is enabled,
 	// by appending a UserPassAuthenticator to AuthMethods. If not provided,
@@ -29,6 +35,8 @@ type Config struct {
 	// Resolver can be provided to do custom name resolution.
 	// Defaults to DNSResolver if not provided.
 	Resolver NameResolver
+
+	// zhou: Supported "CMD" list of "Connect" message
 
 	// Rules is provided to enable custom logic around permitting
 	// various commands. If not provided, PermitAll is used.
@@ -56,6 +64,8 @@ type Server struct {
 	config      *Config
 	authMethods map[uint8]Authenticator
 }
+
+// zhou: README,
 
 // New creates a new Server and potentially returns an error
 func New(conf *Config) (*Server, error) {
@@ -117,10 +127,14 @@ func (s *Server) Serve(l net.Listener) error {
 	return nil
 }
 
+// zhou: handle new SOCKS5 request
+
 // ServeConn is used to serve a single connection.
 func (s *Server) ServeConn(conn net.Conn) error {
 	defer conn.Close()
 	bufConn := bufio.NewReader(conn)
+
+	// zhou: handle message "Init" and following Auth messages.
 
 	// Read the version byte
 	version := []byte{0}
@@ -136,6 +150,9 @@ func (s *Server) ServeConn(conn net.Conn) error {
 		return err
 	}
 
+	// zhou: pick the first matched as the negotiated result.
+	//       Send message "Choose Auth Method" to client
+
 	// Authenticate the connection
 	authContext, err := s.authenticate(conn, bufConn)
 	if err != nil {
@@ -143,6 +160,8 @@ func (s *Server) ServeConn(conn net.Conn) error {
 		s.config.Logger.Printf("[ERR] socks: %v", err)
 		return err
 	}
+
+	// zhou: handle message "Connect", major part of SOCKS request.
 
 	request, err := NewRequest(bufConn)
 	if err != nil {

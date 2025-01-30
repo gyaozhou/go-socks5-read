@@ -1,0 +1,19 @@
+apiVersion: "k8s.cni.cncf.io/v1"
+kind: NetworkAttachmentDefinition
+metadata:
+  name: macvlan-conf-test
+spec:
+  config: '{
+      "cniVersion": "0.3.0",
+      "type": "macvlan",
+      "master": "eth0",
+      "mode": "bridge",
+      "ipam": {
+        "type": "static",
+		    "addresses": [
+			    {
+			    	"address": "10.10.0.1/24",
+			    	"gateway": "10.10.0.254"
+	  	  	}
+  	  	]
+    }'

@@ -30,10 +30,16 @@ type AuthContext struct {
 	Payload map[string]string
 }
 
+// zhou: only NoAuth and Username/Password are supported.
+
 type Authenticator interface {
+	// zhou: send "Choose Auth Method" Message, and handle following auth messages if required.
 	Authenticate(reader io.Reader, writer io.Writer) (*AuthContext, error)
+	// zhou: used to identify the "Method" code in Socks5 protocol.
 	GetCode() uint8
 }
+
+// zhou: "type Authenticator interface {}" implementation, NoAuth
 
 // NoAuthAuthenticator is used to handle the "No Authentication" mode
 type NoAuthAuthenticator struct{}
@@ -42,10 +48,13 @@ func (a NoAuthAuthenticator) GetCode() uint8 {
 	return NoAuth
 }
 
+// zhou: send message "Choose Auth Method"
 func (a NoAuthAuthenticator) Authenticate(reader io.Reader, writer io.Writer) (*AuthContext, error) {
 	_, err := writer.Write([]byte{socks5Version, NoAuth})
 	return &AuthContext{NoAuth, nil}, err
 }
+
+// zhou: "type Authenticator interface {}" implementation, username/password
 
 // UserPassAuthenticator is used to handle username/password based
 // authentication
@@ -121,13 +130,19 @@ func (s *Server) authenticate(conn io.Writer, bufConn io.Reader) (*AuthContext, 
 	for _, method := range methods {
 		cator, found := s.authMethods[method]
 		if found {
+			// zhou: pick the first matched as the negotiated result.
+			//       Send message "Choose Auth Method" to client
 			return cator.Authenticate(bufConn, conn)
 		}
 	}
 
+	// zhou: not found matched Auth Method
+
 	// No usable method found
 	return nil, noAcceptableAuth(conn)
 }
+
+// zhou: not found matched Auth Method
 
 // noAcceptableAuth is used to handle when we have no eligible
 // authentication mechanism
@@ -144,6 +159,7 @@ func readMethods(r io.Reader) ([]byte, error) {
 		return nil, err
 	}
 
+	// zhou: length of Methods
 	numMethods := int(header[0])
 	methods := make([]byte, numMethods)
 	_, err := io.ReadAtLeast(r, methods, numMethods)
